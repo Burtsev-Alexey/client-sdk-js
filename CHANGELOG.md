@@ -1,5 +1,63 @@
 # Change Log
 
+## 2.15.1
+
+### Patch Changes
+
+- fix: ensure offerId is only increased when offers are actually generated - [#1585](https://github.com/livekit/client-sdk-js/pull/1585) ([@lukasIO](https://github.com/lukasIO))
+
+## 2.15.0
+
+### Minor Changes
+
+- allow manual controls even when adaptiveStream is enabled - [#1569](https://github.com/livekit/client-sdk-js/pull/1569) ([@davidzhao](https://github.com/davidzhao))
+
+- Add support for H265 - [#1576](https://github.com/livekit/client-sdk-js/pull/1576) ([@cnderrauber](https://github.com/cnderrauber))
+
+### Patch Changes
+
+- Update active device immediately for muted video tracks - [#1573](https://github.com/livekit/client-sdk-js/pull/1573) ([@yashjain-99](https://github.com/yashjain-99))
+
+## 2.14.0
+
+### Minor Changes
+
+- Add ParticipantEvent.LocalTrackCpuConstrained - [#1553](https://github.com/livekit/client-sdk-js/pull/1553) ([@lukasIO](https://github.com/lukasIO))
+
+### Patch Changes
+
+- Ensure feature support checks include iOS checks - [#1563](https://github.com/livekit/client-sdk-js/pull/1563) ([@lukasIO](https://github.com/lukasIO))
+
+- Ensure encryption transforms are set up as soon as sender is created - [#1561](https://github.com/livekit/client-sdk-js/pull/1561) ([@lukasIO](https://github.com/lukasIO))
+
+- Wrap createAndSendOffer with mutex - [#1567](https://github.com/livekit/client-sdk-js/pull/1567) ([@lukasIO](https://github.com/lukasIO))
+
+## 2.13.8
+
+### Patch Changes
+
+- Fix transceiver reuse causing destination stream closed errors - [#1559](https://github.com/livekit/client-sdk-js/pull/1559) ([@lukasIO](https://github.com/lukasIO))
+
+## 2.13.7
+
+### Patch Changes
+
+- Revert "Fix transceiver reuse causing destination stream closed error… - [#1557](https://github.com/livekit/client-sdk-js/pull/1557) ([@lukasIO](https://github.com/lukasIO))
+
+## 2.13.6
+
+### Patch Changes
+
+- Fix transceiver reuse causing destination stream closed errors - [#1554](https://github.com/livekit/client-sdk-js/pull/1554) ([@lukasIO](https://github.com/lukasIO))
+
+- Stop MediaStream tracks at the end of the video check - [#1552](https://github.com/livekit/client-sdk-js/pull/1552) ([@svajunas-budrys](https://github.com/svajunas-budrys))
+
+- disable dyncast for svc encoding - [#1556](https://github.com/livekit/client-sdk-js/pull/1556) ([@cnderrauber](https://github.com/cnderrauber))
+
+- Update active device immediately for muted audio tracks - [#1526](https://github.com/livekit/client-sdk-js/pull/1526) ([@yashjain-99](https://github.com/yashjain-99))
+
+- Drop outdated sdp answers and forward offer ids - [#1547](https://github.com/livekit/client-sdk-js/pull/1547) ([@lukasIO](https://github.com/lukasIO))
+
 ## 2.13.5
 
 ### Patch Changes
