@@ -22,7 +22,7 @@ import type RemoteTrackPublication from './track/RemoteTrackPublication';
 import type RemoteVideoTrack from './track/RemoteVideoTrack';
 import { Track } from './track/Track';
 import type { TrackPublication } from './track/TrackPublication';
-import { type VideoCodec, videoCodecs } from './track/options';
+import { type AudioCodec, type VideoCodec, audioCodecs, videoCodecs } from './track/options';
 import { getNewAudioContext } from './track/utils';
 import type { ChatMessage, LiveKitReactNativeInfo, TranscriptionSegment } from './types';
 
@@ -64,15 +64,16 @@ export function supportsAV1(): boolean {
   if (!('getCapabilities' in RTCRtpSender)) {
     return false;
   }
-  if (isSafari()) {
+  if (isSafari() || isFireFox()) {
     // Safari 17 on iPhone14 reports AV1 capability, but does not actually support it
+    // Firefox does support AV1, but SVC publishing is not supported
     return false;
   }
   const capabilities = RTCRtpSender.getCapabilities('video');
   let hasAV1 = false;
   if (capabilities) {
     for (const codec of capabilities.codecs) {
-      if (codec.mimeType === 'video/AV1') {
+      if (codec.mimeType.toLowerCase() === 'video/av1') {
         hasAV1 = true;
         break;
       }
@@ -109,7 +110,7 @@ export function supportsVP9(): boolean {
   let hasVP9 = false;
   if (capabilities) {
     for (const codec of capabilities.codecs) {
-      if (codec.mimeType === 'video/VP9') {
+      if (codec.mimeType.toLowerCase() === 'video/vp9') {
         hasVP9 = true;
         break;
       }
@@ -127,7 +128,7 @@ export function supportsH265(): boolean {
   let hasH265 = false;
   if (capabilities) {
     for (const codec of capabilities.codecs) {
-      if (codec.mimeType === 'video/H265') {
+      if (codec.mimeType.toLowerCase() === 'video/h265') {
         hasH265 = true;
         break;
       }
@@ -141,7 +142,7 @@ export function isSVCCodec(codec?: string): boolean {
 }
 
 export function supportsSetSinkId(elm?: HTMLMediaElement): boolean {
-  if (!document) {
+  if (!document || isSafariBased()) {
     return false;
   }
   if (!elm) {
@@ -214,12 +215,12 @@ export function isE2EESimulcastSupported() {
     } else if (
       browser.os === 'iOS' &&
       browser.osVersion &&
-      compareVersions(supportedSafariVersion, browser.osVersion) >= 0
+      compareVersions(browser.osVersion, supportedSafariVersion) >= 0
     ) {
       return true;
     } else if (
       browser.name === 'Safari' &&
-      compareVersions(supportedSafariVersion, browser.version) >= 0
+      compareVersions(browser.version, supportedSafariVersion) >= 0
     ) {
       return true;
     } else {
@@ -282,6 +283,14 @@ export function getDevicePixelRatio(): number {
   return 1;
 }
 
+/**
+ * @param v1 - The first version string to compare.
+ * @param v2 - The second version string to compare.
+ * @returns A number indicating the order of the versions:
+ *   - 1 if v1 is greater than v2
+ *   - -1 if v1 is less than v2
+ *   - 0 if v1 and v2 are equal
+ */
 export function compareVersions(v1: string, v2: string): number {
   const parts1 = v1.split('.');
   const parts2 = v2.split('.');
@@ -418,6 +427,12 @@ export class Future<T> {
 
   onFinally?: () => void;
 
+  get isResolved(): boolean {
+    return this._isResolved;
+  }
+
+  private _isResolved: boolean = false;
+
   constructor(
     futureBase?: (resolve: (arg: T) => void, reject: (e: any) => void) => void,
     onFinally?: () => void,
@@ -429,7 +444,10 @@ export class Future<T> {
       if (futureBase) {
         await futureBase(resolve, reject);
       }
-    }).finally(() => this.onFinally?.());
+    }).finally(() => {
+      this._isResolved = true;
+      this.onFinally?.();
+    });
   }
 }
 
@@ -515,6 +533,10 @@ export function createAudioAnalyser(
   return { calculateVolume, analyser, cleanup };
 }
 
+export function isAudioCodec(maybeCodec: string): maybeCodec is AudioCodec {
+  return audioCodecs.includes(maybeCodec as AudioCodec);
+}
+
 export function isVideoCodec(maybeCodec: string): maybeCodec is VideoCodec {
   return videoCodecs.includes(maybeCodec as VideoCodec);
 }
@@ -529,13 +551,13 @@ export function unwrapConstraint(constraint: ConstrainDOMString | ConstrainULong
   if (Array.isArray(constraint)) {
     return constraint[0];
   }
-  if (constraint.exact) {
+  if (constraint.exact !== undefined) {
     if (Array.isArray(constraint.exact)) {
       return constraint.exact[0];
     }
     return constraint.exact;
   }
-  if (constraint.ideal) {
+  if (constraint.ideal !== undefined) {
     if (Array.isArray(constraint.ideal)) {
       return constraint.ideal[0];
     }

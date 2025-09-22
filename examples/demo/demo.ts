@@ -50,12 +50,14 @@ const state = {
   decoder: new TextDecoder(),
   defaultDevices: new Map<MediaDeviceKind, string>([['audioinput', 'default']]),
   bitrateInterval: undefined as any,
-  e2eeKeyProvider: new ExternalE2EEKeyProvider(),
+  e2eeKeyProvider: new ExternalE2EEKeyProvider({ ratchetWindowSize: 100 }),
   chatMessages: new Map<string, { text: string; participant?: Participant }>(),
 };
 let currentRoom: Room | undefined;
 
 let startTime: number;
+
+let streamReaderAbortController: AbortController | undefined;
 
 const searchParams = new URLSearchParams(window.location.search);
 const storedUrl = searchParams.get('url') ?? 'ws://localhost:7880';
@@ -126,7 +128,7 @@ const appActions = {
       videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,
       },
-      e2ee: e2eeEnabled
+      encryption: e2eeEnabled
         ? { keyProvider: state.e2eeKeyProvider, worker: new E2EEWorker() }
         : undefined,
     };
@@ -256,33 +258,51 @@ const appActions = {
             participant.identity
           }) to ${streamState.toString()}`,
         );
+      })
+      .on(RoomEvent.EncryptionError, (error) => {
+        appendLog(`Error encrypting track data: ${error.message}`);
       });
 
     room.registerTextStreamHandler('lk.chat', async (reader, participant) => {
+      streamReaderAbortController = new AbortController();
+      (<HTMLButtonElement>$('cancel-chat-receive-button')).style.display = 'block';
+
       const info = reader.info;
-      if (info.size) {
+
+      let message = '';
+      try {
+        for await (const chunk of reader.withAbortSignal(streamReaderAbortController.signal)) {
+          message += chunk;
+          console.log('received message', message, participant);
+          handleChatMessage(
+            {
+              id: info.id,
+              timestamp: info.timestamp,
+              message,
+            },
+            room.getParticipantByIdentity(participant?.identity),
+          );
+        }
+      } catch (err) {
+        message += 'ERROR';
         handleChatMessage(
           {
             id: info.id,
             timestamp: info.timestamp,
-            message: await reader.readAll(),
+            message,
           },
           room.getParticipantByIdentity(participant?.identity),
         );
-      } else {
-        handleChatMessage(
-          {
-            id: info.id,
-            timestamp: info.timestamp,
-            message: await reader.readAll(),
-          },
+        throw err;
+      }
 
-          room.getParticipantByIdentity(participant?.identity),
-        );
-
+      if (!info.size) {
         appendLog('text stream finished');
       }
       console.log('final info including close extensions', reader.info);
+
+      streamReaderAbortController = undefined;
+      (<HTMLButtonElement>$('cancel-chat-receive-button')).style.display = 'none';
     });
 
     room.registerByteStreamHandler('files', async (reader, participant) => {
@@ -305,6 +325,9 @@ const appActions = {
 
       appendLog(`Started receiving file "${info.name}" from ${participant?.identity}`);
 
+      streamReaderAbortController = new AbortController();
+      (<HTMLButtonElement>$('cancel-chat-receive-button')).style.display = 'block';
+
       reader.onProgress = (progress) => {
         console.log(`"progress ${progress ? (progress * 100).toFixed(0) : 'undefined'}%`);
 
@@ -314,8 +337,20 @@ const appActions = {
         }
       };
 
-      const result = new Blob(await reader.readAll(), { type: info.mimeType });
+      let byteContents;
+      try {
+        byteContents = await reader.readAll({
+          signal: streamReaderAbortController.signal,
+        });
+      } catch (err) {
+        progressLabel.innerText = `Receiving "${info.name}" - readAll aborted!`;
+        throw err;
+      }
+      const result = new Blob(byteContents, { type: info.mimeType });
       appendLog(`Completely received file "${info.name}" from ${participant?.identity}`);
+
+      streamReaderAbortController = undefined;
+      (<HTMLButtonElement>$('cancel-chat-receive-button')).style.display = 'none';
 
       progressContainer.remove();
 
@@ -400,7 +435,7 @@ const appActions = {
   },
 
   toggleE2EE: async () => {
-    if (!currentRoom || !currentRoom.options.e2ee) {
+    if (!currentRoom || !currentRoom.hasE2EESetup) {
       return;
     }
     // read and set current key from input
@@ -454,7 +489,7 @@ const appActions = {
   },
 
   ratchetE2EEKey: async () => {
-    if (!currentRoom || !currentRoom.options.e2ee) {
+    if (!currentRoom || !currentRoom.hasE2EESetup) {
       return;
     }
     await state.e2eeKeyProvider.ratchetKey();
@@ -532,9 +567,30 @@ const appActions = {
     if (!currentRoom) return;
     const textField = <HTMLInputElement>$('entry');
     if (textField.value) {
-      currentRoom.localParticipant.sendText(textField.value, { topic: 'lk.chat' });
+      let localParticipant = currentRoom.localParticipant;
+      let message = textField.value;
+      localParticipant.sendText(message, { topic: 'lk.chat' }).then((info) => {
+        handleChatMessage(
+          {
+            id: info.id,
+            timestamp: info.timestamp,
+            message: message,
+          },
+          localParticipant,
+        );
+      });
+
       textField.value = '';
     }
+  },
+
+  cancelChatReceive: () => {
+    if (!streamReaderAbortController) {
+      return;
+    }
+    streamReaderAbortController.abort();
+
+    (<HTMLButtonElement>$('cancel-chat-receive-button')).style.display = 'none';
   },
 
   disconnectRoom: () => {
@@ -642,7 +698,7 @@ async function sendGreetingTo(participant: Participant) {
 
   for (const char of greeting) {
     await streamWriter.write(char);
-    await sleep(20);
+    await sleep(50);
   }
   await streamWriter.close();
 }
@@ -1000,7 +1056,7 @@ function setButtonsForState(connected: boolean) {
     'flip-video-button',
     'send-button',
   ];
-  if (currentRoom && currentRoom.options.e2ee) {
+  if (currentRoom && currentRoom.hasE2EESetup) {
     connectedSet.push('toggle-e2ee-button', 'e2ee-ratchet-button');
   }
   const disconnectedSet = ['connect-button'];
