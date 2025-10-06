@@ -22,9 +22,8 @@ const [clientBundle, workerBundle, clientDts, workerDts] = await Promise.all([
     plugins: [
       dts({
         tsconfig: 'tsconfig.json',
-        parallel: true,
         emitDtsOnly: true,
-        tsgo: true,
+        tsgo: false,
       }),
     ],
   }),
@@ -34,7 +33,7 @@ const [clientBundle, workerBundle, clientDts, workerDts] = await Promise.all([
       dts({
         tsconfig: 'tsconfig.json',
         emitDtsOnly: true,
-        tsgo: true,
+        tsgo: false,
       }),
     ],
   }),

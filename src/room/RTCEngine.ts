@@ -211,7 +211,6 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
     this.client = new SignalClient(undefined, this.loggerOptions);
     this.client.signalLatency = this.options.expSignalLatency;
     this.reconnectPolicy = this.options.reconnectPolicy;
-    this.registerOnLineListener();
     this.closingLock = new Mutex();
     this.dataProcessLock = new Mutex();
     this.dcBufferStatus = new Map([
@@ -268,9 +267,12 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
 
       // create offer
       if (!this.subscriberPrimary || joinResponse.fastPublish) {
-        this.negotiate();
+        this.negotiate().catch((err) => {
+          log.error(err, this.logContext);
+        });
       }
 
+      this.registerOnLineListener();
       this.clientConfiguration = joinResponse.clientConfiguration;
       this.emit(EngineEvent.SignalConnected, joinResponse);
       return joinResponse;
@@ -453,7 +455,7 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
         }
       } else if (connectionState === PCTransportState.FAILED) {
         // on Safari, PeerConnection will switch to 'disconnected' during renegotiation
-        if (this.pcState === PCState.Connected) {
+        if (this.pcState === PCState.Connected || this.pcState === PCState.Reconnecting) {
           this.pcState = PCState.Disconnected;
 
           this.handleDisconnect(
@@ -1338,7 +1340,9 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
     }
     if (needNegotiation) {
       // start negotiation
-      this.negotiate();
+      this.negotiate().catch((err) => {
+        log.error(err, this.logContext);
+      });
     }
 
     const targetChannel = this.dataChannelForKind(kind, subscriber);
