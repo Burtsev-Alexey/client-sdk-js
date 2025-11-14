@@ -500,14 +500,17 @@ const appActions = {
 
   toggleAudio: async () => {
     if (!currentRoom) return;
-    const enabled = currentRoom.localParticipant.isMicrophoneEnabled;
     setButtonDisabled('toggle-audio-button', true);
-    if (enabled) {
-      appendLog('disabling audio');
+    const micPub = currentRoom.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPub) {
+      appendLog('unpublishing audio');
+      if (micPub.track) {
+        await currentRoom.localParticipant.unpublishTrack(micPub.track);
+      }
     } else {
       appendLog('enabling audio');
+      await currentRoom.localParticipant.setMicrophoneEnabled(true);
     }
-    await currentRoom.localParticipant.setMicrophoneEnabled(!enabled);
     setButtonDisabled('toggle-audio-button', false);
     updateButtonsForPublishState();
   },
@@ -515,13 +518,16 @@ const appActions = {
   toggleVideo: async () => {
     if (!currentRoom) return;
     setButtonDisabled('toggle-video-button', true);
-    const enabled = currentRoom.localParticipant.isCameraEnabled;
-    if (enabled) {
-      appendLog('disabling video');
+    const camPub = currentRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+    if (camPub) {
+      appendLog('unpublishing video');
+      if (camPub.track) {
+        await currentRoom.localParticipant.unpublishTrack(camPub.track);
+      }
     } else {
       appendLog('enabling video');
+      await currentRoom.localParticipant.setCameraEnabled(true);
     }
-    await currentRoom.localParticipant.setCameraEnabled(!enabled);
     setButtonDisabled('toggle-video-button', false);
     renderParticipant(currentRoom.localParticipant);
 
@@ -1141,19 +1147,14 @@ function updateButtonsForPublishState() {
   }
   const lp = currentRoom.localParticipant;
 
+  const camPub = lp.getTrackPublication(Track.Source.Camera);
+  const micPub = lp.getTrackPublication(Track.Source.Microphone);
+
   // video
-  setButtonState(
-    'toggle-video-button',
-    `${lp.isCameraEnabled ? 'Disable' : 'Enable'} Video`,
-    lp.isCameraEnabled,
-  );
+  setButtonState('toggle-video-button', `${camPub ? 'Unpublish' : 'Publish'} Video`, !!camPub);
 
   // audio
-  setButtonState(
-    'toggle-audio-button',
-    `${lp.isMicrophoneEnabled ? 'Disable' : 'Enable'} Audio`,
-    lp.isMicrophoneEnabled,
-  );
+  setButtonState('toggle-audio-button', `${micPub ? 'Unpublish' : 'Publish'} Audio`, !!micPub);
 
   // screen share
   setButtonState(
